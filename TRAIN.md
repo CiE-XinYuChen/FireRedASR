@@ -27,6 +27,30 @@ export PYTHONPATH=$PWD/:$PYTHONPATH
 LIBRISPEECH=/path/to/LibriSpeech
 ```
 
+### 2.1 一键预处理（推荐）
+使用预处理脚本可一次性完成 FLAC→WAV、清单生成、SPM/词典和 CMVN。
+
+```
+python fireredasr/data/progress.py \
+  --librispeech_root $LIBRISPEECH \
+  --out_dir data/libri 
+```
+
+常用可选参数：
+- 已有 WAV，跳过转换：`--convert_to_wav 0`
+- 自定义集合：`--train_splits "train-clean-100,train-clean-360,train-other-500"`，`--dev_splits "dev-clean,dev-other"`
+- SPM：`--spm_vocab_size 1000 --spm_model_type bpe --character_coverage 1.0`
+- 跳过步骤：`--no_spm` 或 `--no_cmvn`
+
+脚本输出：
+- `data/libri/train/{wav.scp,text}`，`data/libri/dev/{wav.scp,text}`
+- `data/libri/train_text.txt`
+- `data/libri/spm_bpe1000.model`（默认命名）
+- `data/libri/dict.txt`
+- `data/libri/cmvn.ark`
+
+完成后可直接跳到第 6 步“启动训练（AED）”。若需自定义或了解细节，可按第 3–5 步手动执行。
+
 ## 3. 数据准备（LibriSpeech）
 LibriSpeech 原始音频为 FLAC，需转为 16kHz/16-bit 单声道 WAV。以下示例涵盖 train 与 dev 两类 split。
 
@@ -123,6 +147,20 @@ python fireredasr/train/train_aed.py \
   --save_dir exp/aed_librispeech
 ```
 
+或使用简化入口（仅需指定 `--asr_type aed`，其余参数与上相同，透传给 AED 训练器）：
+```
+python asr_train.py --asr_type aed \
+  --train_wav_scp data/libri/train/wav.scp \
+  --train_text    data/libri/train/text \
+  --valid_wav_scp data/libri/dev/wav.scp \
+  --valid_text    data/libri/dev/text \
+  --cmvn          data/libri/cmvn.ark \
+  --dict          data/libri/dict.txt \
+  --spm_model     data/libri/spm_bpe1000.model \
+  --batch_size 8 --epochs 10 --lr 2e-4 \
+  --save_dir exp/aed_librispeech
+```
+
 说明：
 - 日志中 `train_loss/token`、`valid_loss/token` 为按 token 聚合的交叉熵（已忽略 <pad>）。
 - 如显存不足，可降低模型规模（示例）：`--n_layers_enc 12 --n_layers_dec 6 --d_model 512 --n_head 8`。
@@ -165,4 +203,3 @@ wer.py --ref data/libri/dev/text --hyp your_decode.txt --print_sentence_wer 1
 - AMP/梯度累积/多卡 DDP
 
 —— 若需要，我们可将以上策略集成到训练脚本，并在本文件追加对应使用说明。
-
